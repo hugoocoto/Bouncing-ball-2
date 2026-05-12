@@ -1,8 +1,10 @@
+#include "croma.h"
 #include "raylib-6.0_linux_amd64/include/raylib.h"
 #include "raylib-6.0_linux_amd64/include/raymath.h"
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #define WIDTH 600
 #define HEIGHT 400
@@ -53,16 +55,6 @@ void
 obj_draw(Cam *cam, Obj *o)
 {
         DrawCircleV(WTV(cam, o->world), o->radius, o->color);
-}
-
-void
-check_collisions(Obj *o1, Obj *o2)
-{
-        if (CheckCollisionCircles(o1->world, o1->radius, o2->world, o2->radius)) {
-                Vector2 tmp = o1->velocity;
-                o1->velocity = o2->velocity;
-                o2->velocity = tmp;
-        }
 }
 
 void
@@ -129,6 +121,24 @@ recalc_obj_positions(Cam *cam, Obj *o)
         }
 }
 
+void
+check_collisions(Cam *cam, Obj *o1, Obj *o2)
+{
+        if (o1->misc.hold || o2->misc.hold) return;
+        if (CheckCollisionCircles(o1->world, o1->radius, o2->world, o2->radius)) {
+                Vector2 tmp = o1->velocity;
+                o1->velocity = o2->velocity;
+                o2->velocity = tmp;
+                memset(&o1->misc, 0, sizeof o1->misc);
+                memset(&o2->misc, 0, sizeof o2->misc);
+                while (CheckCollisionCircles(o1->world, o1->radius, o2->world, o2->radius)) {
+                        o1->world.x += o1->velocity.x * 0.1;
+                        o1->world.y += o1->velocity.y * 0.1;
+                        o2->world.x += o2->velocity.x * 0.1;
+                        o2->world.y += o2->velocity.y * 0.1;
+                }
+        }
+}
 
 int
 main(int argc, char **argv)
@@ -137,33 +147,47 @@ main(int argc, char **argv)
         InitWindow(600, 400, "Balls, again");
         SetTargetFPS(60);
 
-        Obj o = {
-                .color = RED,
-                .radius = 40,
-                .world = (Vector2) { WIDTH / 2., HEIGHT / 2. },
-                .velocity = (Vector2) { 10, 10 },
-        };
+        DA(Obj)
+        objs = { 0 };
 
-        Obj o2 = {
-                .color = BLUE,
-                .radius = 40,
-                .world = (Vector2) { WIDTH / 2., HEIGHT / 2. },
-                .velocity = (Vector2) { 20, 10 },
-        };
+        da_append(&objs, (Obj) {
+                         .color = RED,
+                         .radius = 40,
+                         .world = (Vector2) { WIDTH / 2., HEIGHT / 2. },
+                         .velocity = (Vector2) { 10, 10 },
+                         });
 
         Cam c = { 0 };
 
 
         while (!WindowShouldClose()) {
-                recalc_obj_positions(&c, &o);
-                recalc_obj_positions(&c, &o2);
-                check_collisions(&o, &o2);
+                if (IsMouseButtonPressed(MOUSE_RIGHT_BUTTON)) {
+                        da_append(&objs, (Obj) {
+                                         .color = BLUE,
+                                         .radius = 40,
+                                         .world = VTW(&c, GetMousePosition()),
+                                         .velocity = (Vector2) { 0, 10 },
+                                         });
+                }
+
+                for_da_each(o, &objs)
+                {
+                        recalc_obj_positions(&c, o);
+                }
+
+                for (Obj *o1 = objs.items; (int) ((o1) -objs.items) < objs.count; ++o1) {
+                        for (Obj *o2 = o1 + 1; (int) ((o2) -objs.items) < objs.count; ++o2) {
+                                check_collisions(&c, o1, o2);
+                        }
+                }
 
                 BeginDrawing();
                 ClearBackground(BLACK);
 
-                obj_draw(&c, &o);
-                obj_draw(&c, &o2);
+                for_da_each(o, &objs)
+                {
+                        obj_draw(&c, o);
+                }
                 EndDrawing();
         }
 
