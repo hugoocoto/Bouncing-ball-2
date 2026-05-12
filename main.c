@@ -126,17 +126,41 @@ check_collisions(Cam *cam, Obj *o1, Obj *o2)
 {
         if (o1->misc.hold || o2->misc.hold) return;
         if (CheckCollisionCircles(o1->world, o1->radius, o2->world, o2->radius)) {
-                Vector2 tmp = o1->velocity;
-                o1->velocity = o2->velocity;
-                o2->velocity = tmp;
+                float dx = o1->world.x - o2->world.x;
+                float dy = o1->world.y - o2->world.y;
+                float distance_sq = (dx * dx) + (dy * dy);
+                float distance = sqrt(distance_sq);
+
+                if (distance < 0.00001) return;
+
+                float overlap = (2 * o1->radius) - distance;
+
+                float nx = dx / distance;
+                float ny = dy / distance;
+                o1->world.x = o1->world.x + nx * (overlap / 2);
+                o1->world.y = o1->world.y + ny * (overlap / 2);
+                o2->world.x = o2->world.x - nx * (overlap / 2);
+                o2->world.y = o2->world.y - ny * (overlap / 2);
+
+                float dvx = o1->velocity.x - o2->velocity.x;
+                float dvy = o1->velocity.y - o2->velocity.y;
+
+                float dot_product = (dvx * dx) + (dvy * dy);
+                float factor = dot_product / distance_sq;
+
+                o1->velocity.x = o1->velocity.x - (factor * dx);
+                o1->velocity.y = o1->velocity.y - (factor * dy);
+                o2->velocity.x = o2->velocity.x + (factor * dx);
+                o2->velocity.y = o2->velocity.y + (factor * dy);
+
                 memset(&o1->misc, 0, sizeof o1->misc);
                 memset(&o2->misc, 0, sizeof o2->misc);
-                while (CheckCollisionCircles(o1->world, o1->radius, o2->world, o2->radius)) {
-                        o1->world.x += o1->velocity.x * 0.1;
-                        o1->world.y += o1->velocity.y * 0.1;
-                        o2->world.x += o2->velocity.x * 0.1;
-                        o2->world.y += o2->velocity.y * 0.1;
-                }
+                // while (CheckCollisionCircles(o1->world, o1->radius, o2->world, o2->radius)) {
+                //         o1->world.x += o1->velocity.x * 0.1;
+                //         o1->world.y += o1->velocity.y * 0.1;
+                //         o2->world.x += o2->velocity.x * 0.1;
+                //         o2->world.y += o2->velocity.y * 0.1;
+                // }
         }
 }
 
